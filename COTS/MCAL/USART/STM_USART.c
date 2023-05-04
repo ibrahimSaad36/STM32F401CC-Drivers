@@ -148,18 +148,15 @@ typedef struct
     u32 USART_GTPR;
 }USARTRegs_t;
 
-//static volatile USARTRegs_t* const usart1Regs = (volatile USARTRegs_t* const) 0x40011000;
-//static volatile USARTRegs_t* const usart2Regs = (volatile USARTRegs_t* const) 0x40004400;
-//static volatile USARTRegs_t* const usart6Regs = (volatile USARTRegs_t* const) 0x40011400;
-
 extern void USART1_IRQHandler(void);
 extern void USART2_IRQHandler(void);
 extern void USART6_IRQHandler(void);
 
-static u8 asyncTxFlag[USART_HANDLERS], asyncRxFlag[USART_HANDLERS];
-static usartSendCallBack_t asyncTxCharCallback[USART_HANDLERS], sendBufferCallbacks[USART_HANDLERS];
+static u8 asyncTxFlag[USART_HANDLERS], asyncRxFlag[USART_HANDLERS], sendDmaFlag[USART_HANDLERS], recieveDmaFlag[USART_HANDLERS];
+static usartSendCallBack_t asyncTxCharCallback[USART_HANDLERS], sendBufferCallbacks[USART_HANDLERS], sendDmaCallbacks[USART_HANDLERS];
 static usartRecieveCallBack_t asyncRxCharCallback[USART_HANDLERS];
 static usartRecieveBufferCallBack_t recieveBufferCallbacks[USART_HANDLERS];
+static usartRecieveDmaCllBack_t recieveDmaCallbacks[USART_HANDLERS];
 static u32 sysClock;
 
 static void getSysClock(u32 clock);
@@ -692,6 +689,128 @@ USART_ErrorStatus_t usart_disable(u32 usartId)
     return errorStatus;
 }
 
+USART_ErrorStatus_t usart_sendDma(u32 usartId, u8 state)
+{
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
+    {
+        switch(usartId)
+        {
+            case usartId_1:
+                sendDmaFlag[0] = 1;
+                break;
+            case usartId_2:
+                sendDmaFlag[1] = 1;
+                break;
+            case usartId_6:
+                sendDmaFlag[2] = 1;
+                break;
+        }
+        usartId &= MSK_CLR_CHECK_ID;
+        CAST_USART_REG(usartId)->USART_CR3 |= (1 << CR3_DMAT);
+        errorStatus = usart_retOk;
+    }
+    else
+    {
+        errorStatus = usart_retInvalidId;
+    }
+    return errorStatus;
+}
+
+USART_ErrorStatus_t usart_setSendDmaCallback(u32 usartId, usartSendCallBack_t cbf)
+{
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
+    {
+        if(cbf)
+        {
+            switch(usartId)
+            {
+                case usartId_1:
+                    sendDmaCallbacks[0] = cbf;
+                    break;
+                case usartId_2:
+                    sendDmaCallbacks[1] = cbf;
+                    break;
+                case usartId_6:
+                    sendDmaCallbacks[2] = cbf;
+                    break;
+            }
+            errorStatus = usart_retOk;
+        }
+        else
+        {
+            errorStatus = usart_retNullPointer;
+        }
+    }
+    else
+    {
+        errorStatus = usart_retInvalidId;
+    }
+    return errorStatus;
+}
+
+USART_ErrorStatus_t usart_recieveDma(u32 usartId, u8 state)
+{
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
+    {
+        switch(usartId)
+        {
+            case usartId_1:
+                recieveDmaFlag[0] = 1;
+                break;
+            case usartId_2:
+                recieveDmaFlag[1] = 1;
+                break;
+            case usartId_6:
+                recieveDmaFlag[2] = 1;
+                break;
+        }
+        usartId &= MSK_CLR_CHECK_ID;
+        CAST_USART_REG(usartId)->USART_CR3 |= (1 << CR3_DMAR);
+        errorStatus = usart_retOk;
+    }
+    else
+    {
+        errorStatus = usart_retInvalidId;
+    }
+    return errorStatus;
+}
+
+USART_ErrorStatus_t usart_setRecieveDmaCallback(u32 usartId, usartRecieveDmaCllBack_t cbf)
+{
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
+    {
+        if(cbf)
+        {
+            switch(usartId)
+            {
+                case usartId_1:
+                    recieveDmaCallbacks[0] = cbf;
+                    break;
+                case usartId_2:
+                    recieveDmaCallbacks[1] = cbf;
+                    break;
+                case usartId_6:
+                    recieveDmaCallbacks[2] = cbf;
+                    break;
+            }
+            errorStatus = usart_retOk;
+        }
+        else
+        {
+            errorStatus = usart_retNullPointer;
+        }
+    }
+    else
+    {
+        errorStatus = usart_retInvalidId;
+    }
+    return errorStatus;
+}
+
 static void getSysClock(u32 clock)
 {
     sysClock = clock;
@@ -701,6 +820,13 @@ void USART1_IRQHandler(void)
 {
     if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_TC)
     {
+        if(sendDmaFlag[USART1_HANDLER])
+        {
+            if(sendDmaCallbacks[USART1_HANDLER])
+            {
+                sendDmaCallbacks[USART1_HANDLER]();
+            }
+        }
         if(asyncTxFlag[USART1_HANDLER])
         {
             if(asyncTxCharCallback[USART1_HANDLER])
@@ -731,6 +857,13 @@ void USART1_IRQHandler(void)
     }
     if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_RXNE)
     {
+        if(recieveDmaFlag[USART1_HANDLER])
+        {
+            if(recieveDmaCallbacks[USART1_HANDLER])
+            {
+                recieveDmaCallbacks[USART1_HANDLER]();
+            }
+        }
         if(asyncRxFlag[USART1_HANDLER])
         {
             if(asyncRxCharCallback[USART1_HANDLER])
@@ -780,6 +913,13 @@ void USART2_IRQHandler(void)
 {
     if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_TC)
     {
+        if(sendDmaFlag[USART2_HANDLER])
+        {
+            if(sendDmaCallbacks[USART2_HANDLER])
+            {
+                sendDmaCallbacks[USART2_HANDLER]();
+            }
+        }
         if(asyncTxFlag[USART2_HANDLER])
         {
             if(asyncTxCharCallback[USART2_HANDLER])
@@ -809,6 +949,13 @@ void USART2_IRQHandler(void)
     }
     if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_RXNE)
     {
+        if(recieveDmaFlag[USART2_HANDLER])
+        {
+            if(recieveDmaCallbacks[USART2_HANDLER])
+            {
+                recieveDmaCallbacks[USART2_HANDLER]();
+            }
+        }
         if(asyncRxFlag[USART2_HANDLER])
         {
             if(asyncRxCharCallback[USART2_HANDLER])
@@ -858,6 +1005,13 @@ void USART6_IRQHandler(void)
 {
     if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_TC)
     {
+        if(sendDmaFlag[USART6_HANDLER])
+        {
+            if(sendDmaCallbacks[USART6_HANDLER])
+            {
+                sendDmaCallbacks[USART6_HANDLER]();
+            }
+        }
         if(asyncTxFlag[USART6_HANDLER])
         {
             if(asyncTxCharCallback[USART6_HANDLER])
@@ -887,6 +1041,13 @@ void USART6_IRQHandler(void)
     }
     if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_RXNE)
     {
+        if(recieveDmaFlag[USART6_HANDLER])
+        {
+            if(recieveDmaCallbacks[USART6_HANDLER])
+            {
+                recieveDmaCallbacks[USART6_HANDLER]();
+            }
+        }
         if(asyncRxFlag[USART6_HANDLER])
         {
             if(asyncRxCharCallback[USART6_HANDLER])

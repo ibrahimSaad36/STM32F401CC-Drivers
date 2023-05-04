@@ -54,6 +54,7 @@
 #define parity_NONE         0x4E
 
 typedef void (*usartSendCallBack_t)(void);
+typedef void (*usartRecieveDmaCllBack_t) (void);
 typedef void (*usartRecieveCallBack_t) (u8 rxData, u8 errorStatus);
 typedef void (*usartRecieveBufferCallBack_t)(void); 
 
@@ -104,5 +105,9 @@ USART_ErrorStatus_t usart_sendCharAsync(u32 usart, u8 usartChar, usartSendCallBa
 USART_ErrorStatus_t usart_recieveCharAsync(u32 usartId, usartRecieveCallBack_t recieveCbf);
 USART_ErrorStatus_t usart_sendBufferAsyncZeroCopy(u32 usartId, const pu8 buffer, u16 bufferSize, usartSendCallBack_t sendCbf);
 USART_ErrorStatus_t usart_recieveBufferAsyncZeroCopy(u32 usartId, pu8 buffer, u16 bufferSize, usartRecieveBufferCallBack_t recieveCbf);
+USART_ErrorStatus_t usart_sendDmaState(u32 usartId, u8 state);
+USART_ErrorStatus_t usart_setSendDmaCallback(u32 usartId, usartSendCallBack_t cbf);
+USART_ErrorStatus_t usart_recieveDmaState(u32 usartId, u8 state);
+USART_ErrorStatus_t usart_setRecieveDmaCallback(u32 usartId, usartRecieveDmaCllBack_t cbf);
 
 #endif
