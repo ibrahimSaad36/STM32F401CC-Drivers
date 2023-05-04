@@ -694,20 +694,40 @@ USART_ErrorStatus_t usart_sendDma(u32 usartId, u8 state)
     USART_ErrorStatus_t errorStatus = usart_retNotOk;
     if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
     {
-        switch(usartId)
+        if(state)
         {
-            case usartId_1:
-                sendDmaFlag[0] = 1;
-                break;
-            case usartId_2:
-                sendDmaFlag[1] = 1;
-                break;
-            case usartId_6:
-                sendDmaFlag[2] = 1;
-                break;
+            switch(usartId)
+            {
+                case usartId_1:
+                    sendDmaFlag[0] = 1;
+                    break;
+                case usartId_2:
+                    sendDmaFlag[1] = 1;
+                    break;
+                case usartId_6:
+                    sendDmaFlag[2] = 1;
+                    break;
+            }
+            usartId &= MSK_CLR_CHECK_ID;
+            CAST_USART_REG(usartId)->USART_CR3 |= (1 << CR3_DMAT);
         }
-        usartId &= MSK_CLR_CHECK_ID;
-        CAST_USART_REG(usartId)->USART_CR3 |= (1 << CR3_DMAT);
+        else
+        {
+            switch(usartId)
+            {
+                case usartId_1:
+                    sendDmaFlag[0] = 0;
+                    break;
+                case usartId_2:
+                    sendDmaFlag[1] = 0;
+                    break;
+                case usartId_6:
+                    sendDmaFlag[2] = 0;
+                    break;
+            }
+            usartId &= MSK_CLR_CHECK_ID;
+            CAST_USART_REG(usartId)->USART_CR3 &= ~(1 << CR3_DMAT);
+        }
         errorStatus = usart_retOk;
     }
     else
@@ -755,20 +775,40 @@ USART_ErrorStatus_t usart_recieveDma(u32 usartId, u8 state)
     USART_ErrorStatus_t errorStatus = usart_retNotOk;
     if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
     {
-        switch(usartId)
+        if(state)
         {
-            case usartId_1:
-                recieveDmaFlag[0] = 1;
-                break;
-            case usartId_2:
-                recieveDmaFlag[1] = 1;
-                break;
-            case usartId_6:
-                recieveDmaFlag[2] = 1;
-                break;
+            switch(usartId)
+            {
+                case usartId_1:
+                    recieveDmaFlag[0] = 1;
+                    break;
+                case usartId_2:
+                    recieveDmaFlag[1] = 1;
+                    break;
+                case usartId_6:
+                    recieveDmaFlag[2] = 1;
+                    break;
+            }
+            usartId &= MSK_CLR_CHECK_ID;
+            CAST_USART_REG(usartId)->USART_CR3 |= (1 << CR3_DMAR);
         }
-        usartId &= MSK_CLR_CHECK_ID;
-        CAST_USART_REG(usartId)->USART_CR3 |= (1 << CR3_DMAR);
+        else
+        {
+            switch(usartId)
+            {
+                case usartId_1:
+                    recieveDmaFlag[0] = 0;
+                    break;
+                case usartId_2:
+                    recieveDmaFlag[1] = 0;
+                    break;
+                case usartId_6:
+                    recieveDmaFlag[2] = 0;
+                    break;
+            }
+            usartId &= MSK_CLR_CHECK_ID;
+            CAST_USART_REG(usartId)->USART_CR3 &= ~(1 << CR3_DMAR);
+        }
         errorStatus = usart_retOk;
     }
     else
