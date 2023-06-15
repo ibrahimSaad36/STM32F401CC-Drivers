@@ -101,6 +101,8 @@ USART_ErrorStatus_t usart_enable(u32 usartId);
 USART_ErrorStatus_t usart_disable(u32 usartId);
 USART_ErrorStatus_t usart_sendCharSync(u32 usartId, u8 usartChar);
 USART_ErrorStatus_t usart_recieveCharSync(u32 usartId, pu8 usartChar);
+USART_ErrorStatus_t usart_sendBufferSyncZeroCopy(u32 usartId, const pu8 buffer, u16 bufferSize);
+USART_ErrorStatus_t usart_recieveBufferSyncZeroCopy(u32 usartId, pu8 buffer, u16 bufferSize);
 USART_ErrorStatus_t usart_sendCharAsync(u32 usart, u8 usartChar, usartSendCallBack_t sendCbf);
 USART_ErrorStatus_t usart_recieveCharAsync(u32 usartId, usartRecieveCallBack_t recieveCbf);
 USART_ErrorStatus_t usart_sendBufferAsyncZeroCopy(u32 usartId, const pu8 buffer, u16 bufferSize, usartSendCallBack_t sendCbf);

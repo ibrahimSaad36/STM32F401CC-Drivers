@@ -160,6 +160,8 @@ static usartRecieveDmaCllBack_t recieveDmaCallbacks[USART_HANDLERS];
 static u32 sysClock;
 
 static void getSysClock(u32 clock);
+static USART_ErrorStatus_t sendCharSync(u32 usartId, u8 usartChar);
+static USART_ErrorStatus_t recieveCharSync(u32 usartId, pu8 usartChar);
 
 USART_ErrorStatus_t usart_init(u32 usartId, usartConfig_t* usartConfig)
 {
@@ -188,19 +190,15 @@ USART_ErrorStatus_t usart_init(u32 usartId, usartConfig_t* usartConfig)
                     if(usartConfig->usartDirection == usartDirection_RX)
                     {
                         CAST_USART_REG(id)->USART_CR1 |= (1 << CR1_RE);
-                        CAST_USART_REG(id)->USART_CR1 |= (1 << CR1_RXNEIE);
                     }
                     else if(usartConfig->usartDirection == usartDirection_TX)
                     {
                         CAST_USART_REG(id)->USART_CR1 |= (1 << CR1_TE);
-                        CAST_USART_REG(id)->USART_CR1 |= (1 << CR1_TCIE);
                     }
                     else
                     {
                         CAST_USART_REG(id)->USART_CR1 |= (1 << CR1_RE);
                         CAST_USART_REG(id)->USART_CR1 |= (1 << CR1_TE);
-                        CAST_USART_REG(id)->USART_CR1 |= (1 << CR1_RXNEIE);
-                        CAST_USART_REG(id)->USART_CR1 |= (1 << CR1_TCIE);
                     }
                     if((usartConfig->overSamplingMode & MSK_CHECK_VALID_OVERS) == MSK_VALID_OVERS)
                     {
@@ -357,32 +355,7 @@ USART_ErrorStatus_t usart_sendCharSync(u32 usartId, u8 usartChar)
         usartId &= MSK_CLR_CHECK_ID;
         if((CAST_USART_REG(usartId)->USART_CR1 & MSK_UE) == USART_ENABLED)
         {
-            u32 timeout = USART_TIME_OUT;
-            while (!(CAST_USART_REG(usartId)->USART_SR & MSK_TXE) && timeout > 0)
-            {
-                timeout--;
-            }
-            if(CAST_USART_REG(usartId)->USART_SR & MSK_TXE)
-            {
-                CAST_USART_REG(usartId)->USART_DR = usartChar;
-                timeout = USART_TIME_OUT;
-                while (!(CAST_USART_REG(usartId)->USART_SR & MSK_TC) && timeout > 0)
-                {
-                    timeout--;
-                }
-                if(CAST_USART_REG(usartId)->USART_SR & MSK_TC)
-                {
-                    errorStatus = usart_retOk;
-                }
-                else
-                {
-                    errorStatus = usart_retTimeOut;
-                }
-            }
-            else
-            {
-                errorStatus = usart_retTimeOut;
-            }
+            errorStatus = sendCharSync(usartId, usartChar);
         }
         else
         {
@@ -404,34 +377,67 @@ USART_ErrorStatus_t usart_recieveCharSync(u32 usartId, pu8 usartChar)
         usartId &= MSK_CLR_CHECK_ID;
         if((CAST_USART_REG(usartId)->USART_CR1 & MSK_UE) == USART_ENABLED)
         {
-            u32 timeout = USART_TIME_OUT;
-            while (!(CAST_USART_REG(usartId)->USART_SR & MSK_RXNE) && timeout > 0)
+            errorStatus = recieveCharSync(usartId, usartChar);
+        }
+        else
+        {
+            errorStatus = usart_retUsartDisabled;
+        }
+    }
+    else
+    {
+        errorStatus = usart_retInvalidId;
+    }
+    return errorStatus;
+}
+
+USART_ErrorStatus_t usart_sendBufferSyncZeroCopy(u32 usartId, const pu8 buffer, u16 bufferSize)
+{
+    USART_ErrorStatus_t errorStatus = usart_retOk;
+    if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
+    {
+        usartId &= MSK_CLR_CHECK_ID;
+        if((CAST_USART_REG(usartId)->USART_CR1 & MSK_UE) == USART_ENABLED)
+        {
+            u16 i;
+            for(i = 0; (i < bufferSize) && (errorStatus == usart_retOk); i++)
             {
-                timeout--;
+                errorStatus = sendCharSync(usartId, buffer[i]);
             }
-            if(CAST_USART_REG(usartId)->USART_SR & MSK_RXNE)
+        }
+        else
+        {
+            errorStatus = usart_retUsartDisabled;
+        }
+    }
+    else
+    {
+        errorStatus = usart_retInvalidId;
+    }
+    return errorStatus;
+}
+
+USART_ErrorStatus_t usart_recieveBufferSyncZeroCopy(u32 usartId, pu8 buffer, u16 bufferSize)
+{
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
+    {
+        usartId &= MSK_CLR_CHECK_ID;
+        if((CAST_USART_REG(usartId)->USART_CR1 & MSK_UE) == USART_ENABLED)
+        {
+            u16 i;
+            u8 ch;
+            for(i = 0; (i < bufferSize); i++)
             {
-                if(CAST_USART_REG(usartId)->USART_SR & MSK_ORE)
+                errorStatus = recieveCharSync(usartId, &ch);
+                if(errorStatus == usart_retOk)
                 {
-                    errorStatus = usart_retDataOverRun;
-                }
-                else if(CAST_USART_REG(usartId)->USART_SR & MSK_FE)
-                {
-                    errorStatus = usart_retFrameError;
-                }
-                else if(CAST_USART_REG(usartId)->USART_SR & MSK_PE)
-                {
-                    errorStatus = usart_retParityError;
+                    buffer[i] = ch;
                 }
                 else
                 {
-                    *usartChar = (u8) CAST_USART_REG(usartId)->USART_DR;
-                    errorStatus = usart_retOk;
+                    break;
                 }
-            }
-            else
-            {
-                errorStatus = usart_retTimeOut;
             }
         }
         else
@@ -479,7 +485,7 @@ USART_ErrorStatus_t usart_sendCharAsync(u32 usartId, u8 usartChar, usartSendCall
                 }
                 else
                 {
-                    
+                    CAST_USART_REG(usartId)->USART_CR1 |= (1 << CR1_TCIE);
                     asyncTxFlag[index] = 1;
                     asyncTxCharCallback[index] = sendCbf;
                     CAST_USART_REG(usartId)->USART_DR = usartChar;
@@ -531,6 +537,7 @@ USART_ErrorStatus_t usart_recieveCharAsync(u32 usartId, usartRecieveCallBack_t r
                 }
                 else
                 {
+                    CAST_USART_REG(usartId)->USART_CR1 |= (1 << CR1_RXNEIE);
                     asyncRxFlag[index] = 1;
                     asyncRxCharCallback[index] = recieveCbf;
                 }
@@ -573,6 +580,7 @@ USART_ErrorStatus_t usart_sendBufferAsyncZeroCopy(u32 usartId, const pu8 buffer,
             {
                 if(sendCbf)
                 {
+                    CAST_USART_REG(usartId)->USART_CR1 |= (1 << CR1_TCIE);
                     sendBufferReq[index].buffer = buffer;
                     sendBufferReq[index].size = bufferSize;
                     sendBufferReq[index].index = 0;
@@ -633,6 +641,7 @@ USART_ErrorStatus_t usart_recieveBufferAsyncZeroCopy(u32 usartId, pu8 buffer, u1
                     recieveBufferReq[index].index = 0;
                     recieveBufferReq[index].flag = 1;
                     recieveBufferCallbacks[index] = recieveCbf;
+                    CAST_USART_REG(usartId)->USART_CR1 |= (1 << CR1_RXNEIE);
                 }
                 else
                 {
@@ -856,45 +865,65 @@ static void getSysClock(u32 clock)
     sysClock = clock;
 }
 
-void USART1_IRQHandler(void)
+static USART_ErrorStatus_t sendCharSync(u32 usartId, u8 usartChar)
 {
-    if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_TC)
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    u32 timeout = USART_TIME_OUT;
+    CAST_USART_REG(usartId)->USART_DR = usartChar;
+    timeout = USART_TIME_OUT;
+    while (!(CAST_USART_REG(usartId)->USART_SR & MSK_TC) && timeout > 0)
     {
-        if(sendDmaFlag[USART1_HANDLER])
+        timeout--;
+    }
+    if(CAST_USART_REG(usartId)->USART_SR & MSK_TC)
+    {
+        CAST_USART_REG(usartId)->USART_SR &= ~MSK_TC;
+        errorStatus = usart_retOk;
+    }
+    else
+    {
+        errorStatus = usart_retTimeOut;
+    }
+    return errorStatus;
+}
+
+static USART_ErrorStatus_t recieveCharSync(u32 usartId, pu8 usartChar)
+{
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    u32 timeout = USART_TIME_OUT;
+    while (!(CAST_USART_REG(usartId)->USART_SR & MSK_RXNE) && timeout > 0)
+    {
+        timeout--;
+    }
+    if(CAST_USART_REG(usartId)->USART_SR & MSK_RXNE)
+    {
+        if(CAST_USART_REG(usartId)->USART_SR & MSK_ORE)
         {
-            if(sendDmaCallbacks[USART1_HANDLER])
-            {
-                sendDmaCallbacks[USART1_HANDLER]();
-            }
+            errorStatus = usart_retDataOverRun;
         }
-        if(asyncTxFlag[USART1_HANDLER])
+        else if(CAST_USART_REG(usartId)->USART_SR & MSK_FE)
         {
-            if(asyncTxCharCallback[USART1_HANDLER])
-            {
-                asyncTxFlag[USART1_HANDLER] = 0;
-                CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~(1 << SR_TC);
-                asyncTxCharCallback[USART1_HANDLER]();
-            }
+            errorStatus = usart_retFrameError;
         }
-        if(sendBufferReq[USART1_HANDLER].flag)
+        else if(CAST_USART_REG(usartId)->USART_SR & MSK_PE)
         {
-            if(sendBufferReq[USART1_HANDLER].index == sendBufferReq[USART1_HANDLER].size)
-            {
-                sendBufferReq[USART1_HANDLER].flag = 0;
-                sendBufferReq[USART1_HANDLER].buffer = NULL;
-                sendBufferReq[USART1_HANDLER].size = 0;
-                if(sendBufferCallbacks[USART1_HANDLER])
-                {
-                    sendBufferCallbacks[USART1_HANDLER]();
-                }
-            }
-            else
-            {
-                CAST_USART_REG(USART1_BASE_ADD)->USART_DR = sendBufferReq[USART1_HANDLER].buffer[sendBufferReq[USART1_HANDLER].index];
-                sendBufferReq[USART1_HANDLER].index++;
-            }
+            errorStatus = usart_retParityError;
+        }
+        else
+        {
+            *usartChar = (u8) CAST_USART_REG(usartId)->USART_DR;
+            errorStatus = usart_retOk;
         }
     }
+    else
+    {
+        errorStatus = usart_retTimeOut;
+    }
+    return errorStatus;
+}
+
+void USART1_IRQHandler(void)
+{
     if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_RXNE)
     {
         if(recieveDmaFlag[USART1_HANDLER])
@@ -928,6 +957,7 @@ void USART1_IRQHandler(void)
                     errorStatus = usart_retOk;
                 }
                 asyncRxFlag[USART1_HANDLER] = 0;
+                CAST_USART_REG(USART1_BASE_ADD)->USART_CR1 &= ~(1 << CR1_RXNEIE);
                 asyncRxCharCallback[USART1_HANDLER](rxData, errorStatus);
             }
         }
@@ -942,51 +972,57 @@ void USART1_IRQHandler(void)
                 recieveBufferReq[USART1_HANDLER].flag = 0;
                 if(recieveBufferCallbacks[USART1_HANDLER])
                 {
+                    CAST_USART_REG(USART1_BASE_ADD)->USART_CR1 &= ~(1 << CR1_RXNEIE);
                     recieveBufferCallbacks[USART1_HANDLER]();
                 }
             }
         }
+        CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_RXNE;
+    }
+    if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_TC)
+    {
+        if(sendDmaFlag[USART1_HANDLER])
+        {
+            if(sendDmaCallbacks[USART1_HANDLER])
+            {
+                sendDmaCallbacks[USART1_HANDLER]();
+            }
+        }
+        if(asyncTxFlag[USART1_HANDLER])
+        {
+            if(asyncTxCharCallback[USART1_HANDLER])
+            {
+                CAST_USART_REG(USART1_BASE_ADD)->USART_CR1 &= ~(1 << CR1_TCIE);
+                asyncTxFlag[USART1_HANDLER] = 0;
+                CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~(1 << SR_TC);
+                asyncTxCharCallback[USART1_HANDLER]();
+            }
+        }
+        if(sendBufferReq[USART1_HANDLER].flag)
+        {
+            if(sendBufferReq[USART1_HANDLER].index == sendBufferReq[USART1_HANDLER].size)
+            {
+                sendBufferReq[USART1_HANDLER].flag = 0;
+                sendBufferReq[USART1_HANDLER].buffer = NULL;
+                sendBufferReq[USART1_HANDLER].size = 0;
+                if(sendBufferCallbacks[USART1_HANDLER])
+                {
+                    CAST_USART_REG(USART1_BASE_ADD)->USART_CR1 &= ~(1 << CR1_TCIE);
+                    sendBufferCallbacks[USART1_HANDLER]();
+                }
+            }
+            else
+            {
+                CAST_USART_REG(USART1_BASE_ADD)->USART_DR = sendBufferReq[USART1_HANDLER].buffer[sendBufferReq[USART1_HANDLER].index];
+                sendBufferReq[USART1_HANDLER].index++;
+            }
+        }
+        CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_TC;
     }
 }
 
 void USART2_IRQHandler(void)
 {
-    if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_TC)
-    {
-        if(sendDmaFlag[USART2_HANDLER])
-        {
-            if(sendDmaCallbacks[USART2_HANDLER])
-            {
-                sendDmaCallbacks[USART2_HANDLER]();
-            }
-        }
-        if(asyncTxFlag[USART2_HANDLER])
-        {
-            if(asyncTxCharCallback[USART2_HANDLER])
-            {
-                asyncTxFlag[USART2_HANDLER] = 0;
-                asyncTxCharCallback[USART2_HANDLER]();
-            }
-        }
-        if(sendBufferReq[USART2_HANDLER].flag)
-        {
-            if(sendBufferReq[USART2_HANDLER].index == sendBufferReq[USART2_HANDLER].size)
-            {
-                sendBufferReq[USART2_HANDLER].flag = 0;
-                sendBufferReq[USART2_HANDLER].buffer = NULL;
-                sendBufferReq[USART2_HANDLER].size = 0;
-                if(sendBufferCallbacks[USART2_HANDLER])
-                {
-                    sendBufferCallbacks[USART2_HANDLER]();
-                }
-            }
-            else
-            {
-                CAST_USART_REG(USART2_BASE_ADD)->USART_DR = sendBufferReq[USART2_HANDLER].buffer[sendBufferReq[USART2_HANDLER].index];
-                sendBufferReq[USART2_HANDLER].index++;
-            }
-        }
-    }
     if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_RXNE)
     {
         if(recieveDmaFlag[USART2_HANDLER])
@@ -1019,6 +1055,7 @@ void USART2_IRQHandler(void)
                     rxData = (u8) CAST_USART_REG(USART2_BASE_ADD)->USART_DR;
                     errorStatus = usart_retOk;
                 }
+                CAST_USART_REG(USART2_BASE_ADD)->USART_CR1 &= ~(1 << CR1_RXNEIE);
                 asyncRxFlag[USART2_HANDLER] = 0;
                 asyncRxCharCallback[USART2_HANDLER](rxData, errorStatus);
             }
@@ -1034,51 +1071,56 @@ void USART2_IRQHandler(void)
                 recieveBufferReq[USART2_HANDLER].flag = 0;
                 if(recieveBufferCallbacks[USART2_HANDLER])
                 {
+                    CAST_USART_REG(USART2_BASE_ADD)->USART_CR1 &= ~(1 << CR1_RXNEIE);
                     recieveBufferCallbacks[USART2_HANDLER]();
                 }
             }
         }
+        CAST_USART_REG(USART2_BASE_ADD)->USART_SR &= ~MSK_RXNE;
+    }
+    if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_TC)
+    {
+        if(sendDmaFlag[USART2_HANDLER])
+        {
+            if(sendDmaCallbacks[USART2_HANDLER])
+            {
+                sendDmaCallbacks[USART2_HANDLER]();
+            }
+        }
+        if(asyncTxFlag[USART2_HANDLER])
+        {
+            if(asyncTxCharCallback[USART2_HANDLER])
+            {
+                CAST_USART_REG(USART2_BASE_ADD)->USART_CR1 &= ~(1 << CR1_TCIE);
+                asyncTxFlag[USART2_HANDLER] = 0;
+                asyncTxCharCallback[USART2_HANDLER]();
+            }
+        }
+        if(sendBufferReq[USART2_HANDLER].flag)
+        {
+            if(sendBufferReq[USART2_HANDLER].index == sendBufferReq[USART2_HANDLER].size)
+            {
+                sendBufferReq[USART2_HANDLER].flag = 0;
+                sendBufferReq[USART2_HANDLER].buffer = NULL;
+                sendBufferReq[USART2_HANDLER].size = 0;
+                if(sendBufferCallbacks[USART2_HANDLER])
+                {
+                    CAST_USART_REG(USART2_BASE_ADD)->USART_CR1 &= ~(1 << CR1_TCIE);
+                    sendBufferCallbacks[USART2_HANDLER]();
+                }
+            }
+            else
+            {
+                CAST_USART_REG(USART2_BASE_ADD)->USART_DR = sendBufferReq[USART2_HANDLER].buffer[sendBufferReq[USART2_HANDLER].index];
+                sendBufferReq[USART2_HANDLER].index++;
+            }
+        }
+        CAST_USART_REG(USART2_BASE_ADD)->USART_SR &= ~MSK_TC;
     }
 }
 
 void USART6_IRQHandler(void)
 {
-    if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_TC)
-    {
-        if(sendDmaFlag[USART6_HANDLER])
-        {
-            if(sendDmaCallbacks[USART6_HANDLER])
-            {
-                sendDmaCallbacks[USART6_HANDLER]();
-            }
-        }
-        if(asyncTxFlag[USART6_HANDLER])
-        {
-            if(asyncTxCharCallback[USART6_HANDLER])
-            {
-                asyncTxFlag[USART6_HANDLER] = 0;
-                asyncTxCharCallback[USART6_HANDLER]();
-            }
-        }
-        if(sendBufferReq[USART6_HANDLER].flag)
-        {
-            if(sendBufferReq[USART6_HANDLER].index == sendBufferReq[USART6_HANDLER].size)
-            {
-                sendBufferReq[USART6_HANDLER].flag = 0;
-                sendBufferReq[USART6_HANDLER].buffer = NULL;
-                sendBufferReq[USART6_HANDLER].size = 0;
-                if(sendBufferCallbacks[USART6_HANDLER])
-                {
-                    sendBufferCallbacks[USART6_HANDLER]();
-                }
-            }
-            else
-            {
-                CAST_USART_REG(USART6_BASE_ADD)->USART_DR = sendBufferReq[USART6_HANDLER].buffer[sendBufferReq[USART6_HANDLER].index];
-                sendBufferReq[USART6_HANDLER].index++;
-            }
-        }
-    }
     if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_RXNE)
     {
         if(recieveDmaFlag[USART6_HANDLER])
@@ -1111,6 +1153,7 @@ void USART6_IRQHandler(void)
                     rxData = (u8) CAST_USART_REG(USART6_BASE_ADD)->USART_DR;
                     errorStatus = usart_retOk;
                 }
+                CAST_USART_REG(USART6_BASE_ADD)->USART_CR1 &= ~(1 << CR1_RXNEIE);
                 asyncRxFlag[USART6_HANDLER] = 0;
                 asyncRxCharCallback[USART6_HANDLER](rxData, errorStatus);
             }
@@ -1126,9 +1169,50 @@ void USART6_IRQHandler(void)
                 recieveBufferReq[USART6_HANDLER].flag = 0;
                 if(recieveBufferCallbacks[USART6_HANDLER])
                 {
+                    CAST_USART_REG(USART6_BASE_ADD)->USART_CR1 &= ~(1 << CR1_RXNEIE);
                     recieveBufferCallbacks[USART6_HANDLER]();
                 }
             }
         }
+        CAST_USART_REG(USART6_BASE_ADD)->USART_SR &= ~MSK_RXNE;
+    }
+    if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_TC)
+    {
+        if(sendDmaFlag[USART6_HANDLER])
+        {
+            if(sendDmaCallbacks[USART6_HANDLER])
+            {
+                sendDmaCallbacks[USART6_HANDLER]();
+            }
+        }
+        if(asyncTxFlag[USART6_HANDLER])
+        {
+            if(asyncTxCharCallback[USART6_HANDLER])
+            {
+                CAST_USART_REG(USART6_BASE_ADD)->USART_CR1 &= ~(1 << CR1_TCIE);
+                asyncTxFlag[USART6_HANDLER] = 0;
+                asyncTxCharCallback[USART6_HANDLER]();
+            }
+        }
+        if(sendBufferReq[USART6_HANDLER].flag)
+        {
+            if(sendBufferReq[USART6_HANDLER].index == sendBufferReq[USART6_HANDLER].size)
+            {
+                sendBufferReq[USART6_HANDLER].flag = 0;
+                sendBufferReq[USART6_HANDLER].buffer = NULL;
+                sendBufferReq[USART6_HANDLER].size = 0;
+                if(sendBufferCallbacks[USART6_HANDLER])
+                {
+                    CAST_USART_REG(USART6_BASE_ADD)->USART_CR1 &= ~(1 << CR1_TCIE);
+                    sendBufferCallbacks[USART6_HANDLER]();
+                }
+            }
+            else
+            {
+                CAST_USART_REG(USART6_BASE_ADD)->USART_DR = sendBufferReq[USART6_HANDLER].buffer[sendBufferReq[USART6_HANDLER].index];
+                sendBufferReq[USART6_HANDLER].index++;
+            }
+        }
+        CAST_USART_REG(USART6_BASE_ADD)->USART_SR &= ~MSK_TC;
     }
 }
