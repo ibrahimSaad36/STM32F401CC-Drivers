@@ -82,7 +82,7 @@
 #define MSK_VALID_WAKEUP            0xE0
 
 /* For USART_CR2 */
-#define CR2_LIN                     14
+#define CR2_LINEN                   14
 #define CR2_CLKEN                   11
 #define MSK_CPOL_STEADY_LOW         0xFFFFFBFF
 #define MSK_CPOL_STEADY_HIGH        0x00000400
@@ -157,6 +157,7 @@ static usartSendCallBack_t asyncTxCharCallback[USART_HANDLERS], sendBufferCallba
 static usartRecieveCallBack_t asyncRxCharCallback[USART_HANDLERS];
 static usartRecieveBufferCallBack_t recieveBufferCallbacks[USART_HANDLERS];
 static usartRecieveDmaCllBack_t recieveDmaCallbacks[USART_HANDLERS];
+static usartRecieveBreakCallBack_t breakCallbacks[USART_HANDLERS];
 static u32 sysClock;
 
 static void getSysClock(u32 clock);
@@ -860,6 +861,75 @@ USART_ErrorStatus_t usart_setRecieveDmaCallback(u32 usartId, usartRecieveDmaCllB
     return errorStatus;
 }
 
+USART_ErrorStatus_t usart_sendBreak(u32 usartId)
+{
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
+    {
+        usartId &= MSK_CLR_CHECK_ID;
+        if((CAST_USART_REG(usartId)->USART_CR1 & MSK_UE) == USART_ENABLED)
+        {
+            CAST_USART_REG(usartId)->USART_CR2 |= (1 << CR2_LINEN);
+	        CAST_USART_REG(usartId)->USART_CR1 |= (1 << CR1_SBK);
+            errorStatus = usart_retOk;
+        }
+        else
+        {
+            errorStatus = usart_retUsartDisabled;
+        }
+    }
+    else
+    {
+        errorStatus = usart_retInvalidId;
+    }
+    return errorStatus;
+}
+
+USART_ErrorStatus_t usart_recieveNextBreak(u32 usartId, usartRecieveBreakCallBack_t cbf)
+{
+    USART_ErrorStatus_t errorStatus = usart_retNotOk;
+    if((usartId & MSK_CHECK_VALID_ID) == MSK_VALID_ID)
+    {
+        if(cbf)
+        {
+            u8 index = 0;
+            switch(usartId)
+            {
+                case usartId_1:
+                    index = 0;
+                    break;
+                case usartId_2:
+                    index = 1;
+                    break;
+                case usartId_6:
+                    index = 2;
+                    break;
+            }
+            usartId &= MSK_CLR_CHECK_ID;
+            if((CAST_USART_REG(usartId)->USART_CR1 & MSK_UE) == USART_ENABLED)
+            {
+                CAST_USART_REG(usartId)->USART_CR2 |= (1 << CR2_LINEN);
+                CAST_USART_REG(usartId)->USART_CR1 |= (1 << CR2_LBDIE);
+                breakCallbacks[index] = cbf;
+                errorStatus = usart_retOk;
+            }
+            else
+            {
+                errorStatus = usart_retUsartDisabled;
+            }
+        }
+        else
+        {
+            errorStatus = usart_retNullPointer;
+        }
+    }
+    else
+    {
+        errorStatus = usart_retInvalidId;
+    }
+    return errorStatus;
+}
+
 static void getSysClock(u32 clock)
 {
     sysClock = clock;
@@ -924,6 +994,14 @@ static USART_ErrorStatus_t recieveCharSync(u32 usartId, pu8 usartChar)
 
 void USART1_IRQHandler(void)
 {
+    if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_LBD)
+    {
+        if(breakCallbacks[USART1_HANDLER])
+        {
+            breakCallbacks[USART1_HANDLER]();
+        }
+        CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_LBD;
+    }
     if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_RXNE)
     {
         if(recieveDmaFlag[USART1_HANDLER])
@@ -941,14 +1019,17 @@ void USART1_IRQHandler(void)
                 u8 rxData = 0;
                 if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_ORE)
                 {
+                    CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_ORE;
                     errorStatus = usart_retDataOverRun;
                 }
                 else if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_FE)
                 {
+                    CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_FE;
                     errorStatus = usart_retFrameError;
                 }
                 else if(CAST_USART_REG(USART1_BASE_ADD)->USART_SR & MSK_PE)
                 {
+                    CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_PE;
                     errorStatus = usart_retParityError;
                 }
                 else
@@ -1023,6 +1104,14 @@ void USART1_IRQHandler(void)
 
 void USART2_IRQHandler(void)
 {
+    if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_LBD)
+    {
+        if(breakCallbacks[USART2_HANDLER])
+        {
+            breakCallbacks[USART2_HANDLER]();
+        }
+        CAST_USART_REG(USART2_BASE_ADD)->USART_SR &= ~MSK_LBD;
+    }
     if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_RXNE)
     {
         if(recieveDmaFlag[USART2_HANDLER])
@@ -1040,14 +1129,17 @@ void USART2_IRQHandler(void)
                 u8 rxData = 0;
                 if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_ORE)
                 {
+                    CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_ORE;
                     errorStatus = usart_retDataOverRun;
                 }
                 else if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_FE)
                 {
+                    CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_FE;
                     errorStatus = usart_retFrameError;
                 }
                 else if(CAST_USART_REG(USART2_BASE_ADD)->USART_SR & MSK_PE)
                 {
+                    CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_PE;
                     errorStatus = usart_retParityError;
                 }
                 else
@@ -1121,6 +1213,14 @@ void USART2_IRQHandler(void)
 
 void USART6_IRQHandler(void)
 {
+    if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_LBD)
+    {
+        if(breakCallbacks[USART6_HANDLER])
+        {
+            breakCallbacks[USART6_HANDLER]();
+        }
+        CAST_USART_REG(USART6_BASE_ADD)->USART_SR &= ~MSK_LBD;
+    }
     if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_RXNE)
     {
         if(recieveDmaFlag[USART6_HANDLER])
@@ -1138,14 +1238,17 @@ void USART6_IRQHandler(void)
                 u8 rxData = 0;
                 if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_ORE)
                 {
+                    CAST_USART_REG(USART6_BASE_ADD)->USART_SR &= ~MSK_ORE;
                     errorStatus = usart_retDataOverRun;
                 }
                 else if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_FE)
                 {
+                    CAST_USART_REG(USART6_BASE_ADD)->USART_SR &= ~MSK_FE;
                     errorStatus = usart_retFrameError;
                 }
                 else if(CAST_USART_REG(USART6_BASE_ADD)->USART_SR & MSK_PE)
                 {
+                    CAST_USART_REG(USART6_BASE_ADD)->USART_SR &= ~MSK_PE;
                     errorStatus = usart_retParityError;
                 }
                 else

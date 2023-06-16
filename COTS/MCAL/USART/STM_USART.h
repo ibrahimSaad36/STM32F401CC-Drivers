@@ -57,6 +57,7 @@ typedef void (*usartSendCallBack_t)(void);
 typedef void (*usartRecieveDmaCllBack_t) (void);
 typedef void (*usartRecieveCallBack_t) (u8 rxData, u8 errorStatus);
 typedef void (*usartRecieveBufferCallBack_t)(void); 
+typedef void (*usartRecieveBreakCallBack_t)(void); 
 
 typedef enum
 {
@@ -111,5 +112,7 @@ USART_ErrorStatus_t usart_sendDmaState(u32 usartId, u8 state);
 USART_ErrorStatus_t usart_setSendDmaCallback(u32 usartId, usartSendCallBack_t cbf);
 USART_ErrorStatus_t usart_recieveDmaState(u32 usartId, u8 state);
 USART_ErrorStatus_t usart_setRecieveDmaCallback(u32 usartId, usartRecieveDmaCllBack_t cbf);
+USART_ErrorStatus_t usart_sendBreak(u32 usartId);
+USART_ErrorStatus_t usart_recieveNextBreak(u32 usartId, usartRecieveBreakCallBack_t cbf);
 
 #endif
