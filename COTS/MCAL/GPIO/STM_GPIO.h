@@ -95,9 +95,9 @@ typedef enum
 typedef struct
 {
     u32 port;
-    u32 pin;
-    u32 speed;
-    u32 mode;
+    u8 pin;
+    u8 speed;
+    u8 mode;
 }gpioCfg_t;
 
 /* Default of all I/O pins is input push pull*/

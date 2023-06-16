@@ -19,7 +19,7 @@
 
 typedef struct
 {
-    u8 gpioPort;
+    u32 gpioPort;
     u8 pin;
     u8 mode;
     pu8 name;
