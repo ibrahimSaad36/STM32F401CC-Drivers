@@ -909,7 +909,7 @@ USART_ErrorStatus_t usart_recieveNextBreak(u32 usartId, usartRecieveBreakCallBac
             if((CAST_USART_REG(usartId)->USART_CR1 & MSK_UE) == USART_ENABLED)
             {
                 CAST_USART_REG(usartId)->USART_CR2 |= (1 << CR2_LINEN);
-                CAST_USART_REG(usartId)->USART_CR1 |= (1 << CR2_LBDIE);
+                CAST_USART_REG(usartId)->USART_CR2 |= (1 << CR2_LBDIE);
                 breakCallbacks[index] = cbf;
                 errorStatus = usart_retOk;
             }
@@ -998,6 +998,8 @@ void USART1_IRQHandler(void)
     {
         if(breakCallbacks[USART1_HANDLER])
         {
+            CAST_USART_REG(USART1_BASE_ADD)->USART_CR2 &= ~(1 << CR2_LINEN);
+            CAST_USART_REG(USART1_BASE_ADD)->USART_CR2 &= ~(1 << CR2_LBDIE);
             breakCallbacks[USART1_HANDLER]();
         }
         CAST_USART_REG(USART1_BASE_ADD)->USART_SR &= ~MSK_LBD;
@@ -1108,6 +1110,8 @@ void USART2_IRQHandler(void)
     {
         if(breakCallbacks[USART2_HANDLER])
         {
+            CAST_USART_REG(USART2_BASE_ADD)->USART_CR2 &= ~(1 << CR2_LINEN);
+            CAST_USART_REG(USART2_BASE_ADD)->USART_CR2 &= ~(1 << CR2_LBDIE);
             breakCallbacks[USART2_HANDLER]();
         }
         CAST_USART_REG(USART2_BASE_ADD)->USART_SR &= ~MSK_LBD;
@@ -1217,6 +1221,8 @@ void USART6_IRQHandler(void)
     {
         if(breakCallbacks[USART6_HANDLER])
         {
+            CAST_USART_REG(USART6_BASE_ADD)->USART_CR2 &= ~(1 << CR2_LINEN);
+            CAST_USART_REG(USART6_BASE_ADD)->USART_CR2 &= ~(1 << CR2_LBDIE);
             breakCallbacks[USART6_HANDLER]();
         }
         CAST_USART_REG(USART6_BASE_ADD)->USART_SR &= ~MSK_LBD;
