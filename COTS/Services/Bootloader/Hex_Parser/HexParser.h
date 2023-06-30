@@ -1,9 +1,9 @@
 /**
  * @file HexParser.h
- * @author your name (you@domain.com)
+ * @author Ibrahim Saad
  * @brief 
  * @version 0.1
- * @date 2023-06-21
+ * @date 2023-06-18
  * 
  * @copyright Copyright (c) 2023
  * 
@@ -12,7 +12,7 @@
 #ifndef HEX_PARSER_H
 #define HEX_PARSER_H
 
-#include "../../COTS/LIB/STD_TYPES.h"
+#include "../../COTS/LIB/Std_types.h"
 
 #define MAX_DATA_SIZE                       16
 #define MAX_BUFFER_SIZE                     45
@@ -36,8 +36,8 @@ u8 hexParser_asciiToDigit(u8 ascii);
 u8 hexParser_hexByteToDecimal(const pu8 byte);
 u8 hexParser_calculateChecksum(const HexRecord_t* record);
 u8 hexParser_parseHexRecord(u8 *buffer, HexRecord_t *record);
-u16 hexParser_parse16UpperBitsAddRecord(const pu8 record);
+u32 hexParser_parse16UpperBitsAddRecord(const pu8 record);
 u32 hexParser_getStartExecutionAdrress(const pu8 record);
-void hexParser_bytesTo32Bits(const pu8 bytes, pu8 words, u8 size, pu8 sizeWords);
+void hexParser_bytesTo32Bits(const pu8 bytes, pu32 words, u8 size, pu8 sizeWords);
 
 #endif      /* HEX_PARSER_H */

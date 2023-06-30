@@ -1,9 +1,9 @@
 /**
  * @file HexParser.c
- * @author your name (you@domain.com)
+ * @author Ibrahim Saad
  * @brief 
  * @version 0.1
- * @date 2023-06-21
+ * @date 2023-06-18
  * 
  * @copyright Copyright (c) 2023
  * 
@@ -85,9 +85,9 @@ u8 hexParser_parseHexRecord(u8 *buffer, HexRecord_t *record)
     return retVal;
 }
 
-u16 hexParser_parse16UpperBitsAddRecord(const pu8 record)
+u32 hexParser_parse16UpperBitsAddRecord(const pu8 record)
 {
-    u16 address = 0;
+    u32 address = 0;
     if(record[8] == '4')
     {
         /* extended linear address record */
@@ -108,7 +108,7 @@ u32 hexParser_getStartExecutionAdrress(const pu8 record)
     return ret;
 }
 
-void hexParser_bytesTo32Bits(const pu8 bytes, pu8 words, u8 size, pu8 sizeWords)
+void hexParser_bytesTo32Bits(const pu8 bytes, pu32 words, u8 size, pu8 sizeWords)
 {
     u8 i, j;
     for (i = 0, j = 0; i < size; i += 4, j++) {
